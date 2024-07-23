@@ -1,14 +1,15 @@
 #!/usr/bin/env python
-import rospy
+import rclpy
+from rclpy.node import Node
 from simulator import Simulator
 
 
 def main():
-    rospy.init_node('simulation_node', anonymous=True)
-    rospy.loginfo("Start simulation node")
+    rclpy.init(anonymous=True)
+    Node.get_logger().info("Start simulation node")
 
     sim = Simulator()
-    rospy.spin()
+    rclpy.spin(sim)
 
 if __name__ == '__main__':
     main()

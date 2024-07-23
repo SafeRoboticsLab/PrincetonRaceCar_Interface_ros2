@@ -1,4 +1,5 @@
-import rospy
+import rclpy
+from rclpy.node import Node
 import numpy as np
 from .realtime_buffer import RealtimeBuffer
 from .dynamics import Bicycle4D
@@ -12,17 +13,27 @@ from racecar_interface.srv import Reset
 import queue
 
 
-class Simulator:
+class Simulator(Node):
     def __init__(self):
+        super().__init__("simulation_node")
+        # declare parameters
+        self.declare_parameter('~control_topic', '/control')
+        self.declare_parameter('~odom_topic', '/sim_pose')
+        self.declare_parameter('~pub_rate', 30)
+        self.declare_parameter('~init_x', 0)
+        self.declare_parameter('~init_y', 0)
+        self.declare_parameter('~init_yaw', 0)
+        self.declare_parameter('~serice_name', '/simulation/reset')
+
         # read parameters
-        control_topic = rospy.get_param('~control_topic', '/control')
-        odom_topic = rospy.get_param('~odom_topic', '/sim_pose')
-        self.pub_rate = rospy.get_param('~pub_rate', 30)
+        control_topic = self.get_parameter('~control_topic').value
+        odom_topic = self.get_parameter('~odom_topic').value
+        self.pub_rate = self.get_parameter('~pub_rate').value
         
-        init_x= rospy.get_param('~init_x', 0)
-        init_y = rospy.get_param('~init_y', 0)
-        init_yaw = rospy.get_param('~init_yaw', 0)
-        serice_name = rospy.get_param('~serice_name', '/simulation/reset')
+        init_x= self.get_parameter('~init_x').value
+        init_y = self.get_parameter('~init_y').value
+        init_yaw = self.get_parameter('~init_yaw').value
+        serice_name = self.get_parameter('~serice_name').value
         
         self.sigma = np.zeros(2)
         self.latency = 0 
@@ -34,19 +45,19 @@ class Simulator:
         
         self.control_buffer = RealtimeBuffer()
         
-        self.odom_pub = rospy.Publisher(odom_topic, Odometry, queue_size=1)
-        self.control_sub = rospy.Subscriber(control_topic, ServoMsg, self.control_callback, queue_size=1)
+        self.odom_pub = self.create_publisher(odom_topic, Odometry, queue_size=1)
+        self.control_sub = self.create_subscription(control_topic, ServoMsg, self.control_callback, queue_size=1)
         
-        self.dyn_server = Server(simConfig, self.reconfigure_callback)
+        self.dyn_server = self.create_service(simConfig, self.reconfigure_callback)
         
-        self.reset_srv = rospy.Service(serice_name, Reset, self.reset_cb)
+        self.reset_srv = self.create_service(serice_name, Reset, self.reset_cb)
     
         threading.Thread(target=self.simulation_thread).start()
     
     def reset_cb(self, req):
         self.update_lock.acquire()
         self.current_state = np.array([req.x, req.y, 0, req.yaw])
-        rospy.loginfo(f"Simulation Reset to {self.current_state}")
+        self.get_logger().info(f"Simulation Reset to {self.current_state}")
         self.update_lock.release()
         return True
     
@@ -58,7 +69,7 @@ class Simulator:
         self.reset_latency = (latency_new != self.latency)
         self.latency = latency_new
         
-        rospy.loginfo(f"Simulation Noise Updated to {self.sigma}. Latency Updated to {self.latency} s")
+        self.get_logger().info(f"Simulation Noise Updated to {self.sigma}. Latency Updated to {self.latency} s")
         self.update_lock.release()
         return config
         
@@ -67,9 +78,9 @@ class Simulator:
         self.control_buffer.writeFromNonRT(control)
         
     def simulation_thread(self):
-        rate = rospy.Rate(self.pub_rate)
+        rate = self.create_rate(self.pub_rate)
         msg_queue = queue.Queue()
-        while not rospy.is_shutdown():
+        while rclpy.ok():
             # read control
             self.update_lock.acquire()
             control = self.control_buffer.readFromRT()
@@ -78,7 +89,7 @@ class Simulator:
             
             self.current_state[3] = np.arctan2(np.sin(self.current_state[3]), np.cos(self.current_state[3]))
             odom_msg = Odometry()
-            odom_msg.header.stamp = rospy.Time.now()
+            odom_msg.header.stamp = rclpy.Time.now()
             odom_msg.header.frame_id = 'map'
             odom_msg.pose.pose.position.x = self.current_state[0]
             odom_msg.pose.pose.position.y = self.current_state[1]
@@ -98,7 +109,7 @@ class Simulator:
                 self.reset_latency = False
                 
             msg_queue.put(odom_msg)
-            t_cur = rospy.Time.now().to_sec()
+            t_cur = rclpy.Time.now().to_sec()
             t_queue_top = msg_queue.queue[0].header.stamp.to_sec()
             dt = t_cur - t_queue_top
             

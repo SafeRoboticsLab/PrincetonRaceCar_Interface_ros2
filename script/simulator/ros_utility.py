@@ -1,4 +1,5 @@
-import rospy
+import rclpy
+from rclpy.node import Node
 
 def get_ros_param(param_name: str, default):
     '''
@@ -9,19 +10,19 @@ def get_ros_param(param_name: str, default):
     Return:
         value of the parameter
     '''
-    if rospy.has_param(param_name):
-        return rospy.get_param(param_name)
+    if Node.has_parameter(param_name):
+        return Node.get_parameter(param_name).value
     else:
         # try seach parameter
         if param_name[0] == '~':
-            search_param_name = rospy.search_param(param_name[1:])
+            search_param_name = Node.get_parameter(param_name[1:]).value
         else:
-            search_param_name = rospy.search_param(param_name)
+            search_param_name = Node.get_parameter(param_name).value
 
         if search_param_name is not None:
-            rospy.loginfo('Parameter %s not found, search found %s, using it', param_name, search_param_name)
-            return rospy.get_param(search_param_name)
+            Node.get_logger().info('Parameter %s not found, search found %s, using it', param_name, search_param_name)
+            return Node.get_parameter(search_param_name).value
         else:
-            rospy.logwarn("Parameter '%s' not found, using default: %s", param_name, default)
+            Node.get_logger().warn("Parameter '%s' not found, using default: %s", param_name, default)
             return default
 
