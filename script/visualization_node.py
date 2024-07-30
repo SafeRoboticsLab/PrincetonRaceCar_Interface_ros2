@@ -1,5 +1,6 @@
 #!/usr/bin/env python
-import rospy
+import rclpy
+from rclpy.node import Node
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import PoseStamped
 from racecar_msgs.msg import OdometryArray
@@ -10,19 +11,26 @@ from geometry_msgs.msg import Point
 import numpy as np
 import copy
 
-class TruckVis:
+class TruckVis(Node):
     def __init__(self) -> None:
-        odom_topic = rospy.get_param('~odom_topic', '/slam_pose')
-        dyn_obs_topic = rospy.get_param('~dyn_obs_topic', '/Obstacles/Dynamic')
+        super().__init__("visualization_node")
+        # declare paramaeters
+        self.declare_parameter('~odom_topic', '/slam_pose')
+        self.declare_parameter('~dyn_obs_topic', '/Obstacles/Dynamic')
+
+        # getting parameter values
+        odom_topic = self.get_parameter('~odom_topic').value
+        dyn_obs_topic = self.get_parameter('~dyn_obs_topic').value
+
         # setup subscribers
-        self.pose_sub = rospy.Subscriber(odom_topic, Odometry, self.odometry_callback, queue_size=1)
-        self.dyn_obs_sub = rospy.Subscriber(dyn_obs_topic, OdometryArray, self.dyn_obs_callback, queue_size=1)
+        self.pose_sub = self.create_subscription(odom_topic, Odometry, self.odometry_callback, queue_size=1)
+        self.dyn_obs_sub = self.create_subscription(dyn_obs_topic, OdometryArray, self.dyn_obs_callback, queue_size=1)
         
         # setup publishers
-        self.car_pub = rospy.Publisher('/vis/truck', MarkerArray, queue_size=1)
-        self.origin_pub = rospy.Publisher('/vis/origin', PoseStamped, queue_size=1)
-        self.playground_pub = rospy.Publisher('/vis/playground', Marker, queue_size=1)
-        self.dyn_obs_pub = rospy.Publisher('/vis/dyn_obs', MarkerArray, queue_size=1)
+        self.car_pub = self.create_publisher('/vis/truck', MarkerArray, queue_size=1)
+        self.origin_pub = self.create_publisher('/vis/origin', PoseStamped, queue_size=1)
+        self.playground_pub = self.create_publisher('/vis/playground', Marker, queue_size=1)
+        self.dyn_obs_pub = self.create_publisher('/vis/dyn_obs', MarkerArray, queue_size=1)
 
     def dyn_obs_callback(self, msg):
         color = [204/255.0, 51/255.0, 0/255.0,  0.5]
@@ -44,14 +52,14 @@ class TruckVis:
     def visualize_origin(self):
         marker = PoseStamped()
         marker.header.frame_id = 'map'
-        marker.header.stamp = rospy.Time.now()
-        if not rospy.is_shutdown():
+        marker.header.stamp = self.get_clock.now()
+        if rclpy.ok():
             self.origin_pub.publish(marker)
         
     def visualize_playground(self):
         marker = Marker()
         marker.header.frame_id = 'map'
-        marker.header.stamp = rospy.Time.now()
+        marker.header.stamp = self.get_clock.now()
         
         marker.type = 4 # Line Strip
         marker.ns = 'playground'
@@ -85,7 +93,7 @@ class TruckVis:
         marker.color.g = 0/255.0
         marker.color.b = 0/255.0
         marker.color.a = 1.0
-        if not rospy.is_shutdown():
+        if rclpy.ok():
             self.playground_pub.publish(marker)
         
     def visualize_car(self, msg, ns, id, color, marker_array):        
@@ -115,7 +123,7 @@ class TruckVis:
         cubiod.color.g = color[1]
         cubiod.color.b = color[2]
         cubiod.color.a = 0.5
-        cubiod.lifetime = rospy.Duration(0)
+        cubiod.lifetime = rclpy.duration.Duration(0)
         marker_array.markers.append(cubiod)
         
         # Create the arrow marker
@@ -136,16 +144,15 @@ class TruckVis:
         arrow.color.b = 255/255.0
         arrow.color.a = 1.0
         
-        arrow.lifetime = rospy.Duration(0)
+        arrow.lifetime = rclpy.duration.Duration(0)
         marker_array.markers.append(arrow)
         
     
-def main():
-    rospy.init_node('visualization_node')
-    rospy.loginfo("Start visualization node")
-    
+def main(args=None):
+    rclpy.init(args=args)
     vis = TruckVis()
-    rospy.spin()
+    vis.get_logger().info("Start visualization node")
+    rclpy.spin(vis)
 
 
 if __name__ == '__main__':

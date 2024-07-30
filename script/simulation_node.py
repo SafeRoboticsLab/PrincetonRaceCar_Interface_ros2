@@ -5,8 +5,9 @@ from simulator import Simulator
 
 
 def main():
+    node = Node("simulation_node")
     rclpy.init(anonymous=True)
-    Node.get_logger().info("Start simulation node")
+    node.get_logger().info("Start simulation node")
 
     sim = Simulator()
     rclpy.spin(sim)

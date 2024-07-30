@@ -1,14 +1,15 @@
 #!/usr/bin/env python
-import rospy
+import rclpy
+from rclpy.node import Node
 from simulator import TrafficSimulator
 
 
 def main():
-    rospy.init_node('traffic_simulation_node')
-    rospy.loginfo("Start traffic simulation node")
-    map_file = rospy.get_param("~map_file")
+    node = Node('traffic_simulation_node')
+    node.get_logger().info("Start traffic simulation node")
+    map_file = node.get_parameter("~map_file").value
     sim = TrafficSimulator(map_file)
-    rospy.spin()
+    rclpy.spin(sim)
 
 if __name__ == '__main__':
     main()
