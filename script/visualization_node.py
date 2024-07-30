@@ -52,14 +52,14 @@ class TruckVis(Node):
     def visualize_origin(self):
         marker = PoseStamped()
         marker.header.frame_id = 'map'
-        marker.header.stamp = self.get_clock.now()
+        marker.header.stamp = self.get_clock().now()
         if rclpy.ok():
             self.origin_pub.publish(marker)
         
     def visualize_playground(self):
         marker = Marker()
         marker.header.frame_id = 'map'
-        marker.header.stamp = self.get_clock.now()
+        marker.header.stamp = self.get_clock().now()
         
         marker.type = 4 # Line Strip
         marker.ns = 'playground'

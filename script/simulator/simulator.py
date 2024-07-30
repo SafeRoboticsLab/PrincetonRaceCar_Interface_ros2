@@ -89,7 +89,7 @@ class Simulator(Node):
             
             self.current_state[3] = np.arctan2(np.sin(self.current_state[3]), np.cos(self.current_state[3]))
             odom_msg = Odometry()
-            odom_msg.header.stamp = rclpy.Time.now()
+            odom_msg.header.stamp = self.get_clock().now()
             odom_msg.header.frame_id = 'map'
             odom_msg.pose.pose.position.x = self.current_state[0]
             odom_msg.pose.pose.position.y = self.current_state[1]
@@ -109,7 +109,7 @@ class Simulator(Node):
                 self.reset_latency = False
                 
             msg_queue.put(odom_msg)
-            t_cur = rclpy.Time.now().to_sec()
+            t_cur = self.get_clock().now().to_sec()
             t_queue_top = msg_queue.queue[0].header.stamp.to_sec()
             dt = t_cur - t_queue_top
             
