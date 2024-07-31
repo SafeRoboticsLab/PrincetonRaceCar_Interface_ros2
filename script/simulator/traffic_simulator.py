@@ -1,6 +1,9 @@
-import rospy
+import rclpy
+from rclpy.node import Node
+from builtin_interfaces.msg import Duration
 import pickle
 import numpy as np
+from std_msgs.msg import Header
 from .dynamics import Bicycle4D
 from .ref_path import RefPath
 from .ros_utility import get_ros_param
@@ -15,8 +18,9 @@ from racecar_interface.srv import ResetObstacle
 import queue
 
 
-class TrafficSimulator:
+class TrafficSimulator(Node):
     def __init__(self, map_file):
+        super().__init__("traffic_simulator")
         
         with open(map_file, 'rb') as f:
             self.lanelet_map = pickle.load(f)
@@ -32,7 +36,7 @@ class TrafficSimulator:
         self.dyn = Bicycle4D(1.0/self.pub_rate)
         
         self.dyn_server = Server(simConfig, self.reconfigure_callback)
-        self.reset_srv = rospy.Service('/simulation/reset_static_obstacle', ResetObstacle, self.reset_cb)
+        self.reset_srv = self.create_service('/simulation/reset_static_obstacle', ResetObstacle, self.reset_cb)
         
         self.setup_publisher()
 
@@ -42,7 +46,7 @@ class TrafficSimulator:
         self.update_lock.acquire()
         self.num_static_obj = req.n
         self.static_obs_msg = self.create_static_obs()
-        rospy.loginfo(f"Static Obstacle Reset")
+        self.get_logger().info(f"Static Obstacle Reset")
         self.update_lock.release()
         return True
         
@@ -61,8 +65,8 @@ class TrafficSimulator:
             self.static_obs_msg = self.create_static_obs()
             
     def setup_publisher(self):
-        self.static_obs_publisher = rospy.Publisher(self.static_obs_topic, MarkerArray, queue_size=1)
-        self.dyn_obs_publisher = rospy.Publisher(self.dyn_obs_topic, OdometryArray, queue_size=1)
+        self.static_obs_publisher = self.create_publisher(self.static_obs_topic, MarkerArray, queue_size=1)
+        self.dyn_obs_publisher = self.create_publisher(self.dyn_obs_topic, OdometryArray, queue_size=1)
         
     def reconfigure_callback(self, config, level):
         self.update_lock.acquire()
@@ -74,7 +78,7 @@ class TrafficSimulator:
         self.reset_latency = (latency_new != self.latency)
         self.latency = latency_new
         
-        rospy.loginfo(f"Simulation Noise Updated to {self.sigma}. Latency Updated to {self.latency} s")
+        self.get_logger().info(f"Simulation Noise Updated to {self.sigma}. Latency Updated to {self.latency} s")
         self.update_lock.release()
         return config
         
@@ -88,11 +92,11 @@ class TrafficSimulator:
             ref_path, v_ref = self.gen_ref_path(pose)
             dyn_obs_pose[i] = {'state': state, 'path': ref_path, 'v_ref': v_ref}
         
-        rate = rospy.Rate(self.pub_rate)
+        rate = self.create_rate(self.pub_rate)
         msg_queue = queue.Queue()
         
-        while not rospy.is_shutdown():
-            header = rospy.Header(frame_id = 'map', stamp=rospy.Time.now())
+        while rclpy.ok():
+            header = Header(frame_id = 'map', stamp=self.get_clock().now())
             odom_array_msg = OdometryArray()
             odom_array_msg.header = header
             
@@ -148,7 +152,7 @@ class TrafficSimulator:
                 self.reset_latency = False
                 
             msg_queue.put(odom_array_msg)
-            t_cur = rospy.Time.now().to_sec()
+            t_cur = self.get_clock().now().to_sec()
             t_queue_top = msg_queue.queue[0].header.stamp.to_sec()
             dt = t_cur - t_queue_top
             
@@ -209,7 +213,7 @@ class TrafficSimulator:
             marker.color.b = 153/255.0
             marker.color.a = 0.8
             
-            marker.lifetime = rospy.Duration(1.5/self.pub_rate)
+            marker.lifetime = Duration(sec=int(1.5 / self.pub_rate), nanosec=int((1.5 / self.pub_rate % 1) * 1e9))
             
             static_obs_msg.markers.append(marker)
         return static_obs_msg
@@ -251,7 +255,7 @@ class TrafficSimulator:
             marker.color.b = 153/255.0
             marker.color.a = 0.8
             
-            marker.lifetime = rospy.Duration(1.5/self.pub_rate)
+            marker.lifetime = Duration(sec=int(1.5 / self.pub_rate), nanosec=int((1.5 / self.pub_rate % 1) * 1e9))
             
             static_obs_msg.markers.append(marker)
         return static_obs_msg
